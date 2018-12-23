@@ -40,6 +40,8 @@ function calculate() {
 
 	set("number_of_fingers", get("inner_y") / get("material_thickness"));//todo: this MUST be integer
 	set("flip_stays_the_same", !(get("number_of_fingers") % 2));
+
+	set("between_cuts", get("distance_between_divider_middle") - get("material_thickness"));
 }
 
 function p(a ,b) {
@@ -83,7 +85,7 @@ function path_divider() {
 	path.push("v " + -horizontal_side);
 	path.push("h " + -get("material_thickness"));
 	path.push("v " + -get("joint_length"));
-	return path;
+	return [path];
 }
 
 function path_base() {
@@ -94,7 +96,7 @@ function path_base() {
 	path.push("h " + get("inner_x"));
 	path.push("h " + get("material_thickness"));
 
-	const length = (get("number_of_dividers") + 1) * get("distance_between_divider_middle");
+	const length = (get("number_of_dividers") + 1) * get("distance_between_divider_middle") - get("material_thickness");
 	path.push("v " + length);
 
 	path.push("h " + -get("material_thickness"));
@@ -108,7 +110,7 @@ function path_base() {
 	for (let i = 0; i < get("number_of_horizontal_joints"); ++i) {
 		for (let j = 0; j < get("number_of_dividers"); ++j) {
 			const x_pos = get("material_thickness") + (i + 1) * get("space_between_joints") + i * get("joint_length");
-			const y_pos = (j + 1) * get("distance_between_divider_middle");
+			const y_pos = j * get("distance_between_divider_middle") + get("between_cuts");
 			let inner_path = ["M " + p(x_pos, y_pos)];
 			inner_path.push("h " + get("joint_length"));
 			inner_path.push("v " + get("material_thickness"));
@@ -150,7 +152,7 @@ function path_short_side() {
 	path.push(...path_finger_joint(get("number_of_fingers"), false, true, true));
 	path.push("h " + -get("inner_x"));
 	path.push(...path_finger_joint(get("number_of_fingers"), !get("flip_stays_the_same"), true, false));
-	return path;
+	return [path];
 }
 
 function path_long_side() {
@@ -158,44 +160,43 @@ function path_long_side() {
 
 	path.push(...path_finger_joint(get("number_of_fingers"), true, false, true));
 
-	const between_cuts = get("distance_between_divider_middle") - get("material_thickness");
-
 	for (let i = 0; i < get("number_of_dividers"); ++i) {
-		path.push("v " + between_cuts);
+		path.push("v " + get("between_cuts"));
 		path.push("h " + -get("joint_length"));
 		path.push("v " + get("material_thickness"));
 		path.push("h " + get("joint_length"));
 	}
 
-	path.push("v " + between_cuts);
+	path.push("v " + get("between_cuts"));
 
 	path.push(...path_finger_joint(get("number_of_fingers"), get("flip_stays_the_same"), false, false));
 
 	const bottom_length = get("number_of_dividers") * get("distance_between_divider_middle");
 	path.push("z");
-	return path;
+	return [path];
 }
 
 function update_svg() {
-	let s = document.getElementById("svg");
+	update_svg_by_id("svg_base", path_base());
+	update_svg_by_id("svg_long", path_long_side());
+	update_svg_by_id("svg_short", path_short_side());
+	update_svg_by_id("svg_divider", path_divider());
+}
 
-	while (s.firstChild) {
-		s.firstChild.remove();
+function update_svg_by_id(id , content) {
+	let svg = document.getElementById(id);
+
+	while (svg.firstChild) {
+		svg.firstChild.remove();
 	}
 
-	// const x = [path_base(), path_long_side()];
-	const x = path_base();
-
-	for (const path of x) {
-		// console.log(path);
+	for (const path of content) {
 		var newElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
 		newElement.style.stroke = "#000";
 		newElement.style.strokeWidth = "0.1";
 		newElement.style.fill = "none";
-		// const path = path_long_side();
-		// const path = path_short_side();
 		newElement.setAttribute("d", path.join(" "));
-		s.appendChild(newElement);
+		svg.appendChild(newElement);
 	}
 }
 
