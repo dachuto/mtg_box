@@ -8,7 +8,11 @@ function get(name) {
 }
 
 function set(name, value) {
-	values[name] = {x:value};
+	values[name] = {x:value, read_only:false};
+}
+
+function calc(name, value) {
+	values[name] = {x:value, read_only:true};
 }
 
 function set_up() {
@@ -17,13 +21,13 @@ function set_up() {
 	set("card_height", 88);
 
 	set("margin_horizontal", 3);
-	set("margin_top", 6);
+	set("margin_top", 4); //material
 
 	set("cut_horizontal", 32);
 	set("cut_vertical_straight_depth", 10);
 	set("cut_vertical_curve_depth", 32);
 	set("cut_small_horizontal", 4);
-	set("joint_length", 6);
+	set("joint_length", 6); //tricky
 	set("number_of_horizontal_joints", 2);
 	set("number_of_dividers", 3);
 	set("distance_between_divider_middle", 20);
@@ -31,17 +35,18 @@ function set_up() {
 
 
 function calculate() {
-	set("inner_x", get("card_width") + 2 * get("margin_horizontal"));
-	set("inner_y",  get("card_height") + get("margin_top"));
+	calc("inner_x", get("card_width") + 2 * get("margin_horizontal"));
+	calc("inner_y",  get("card_height") + get("margin_top"));
+	calc("between_cuts", get("distance_between_divider_middle") - get("material_thickness"));
+	calc("inner_z", (get("number_of_dividers") + 1) * get("distance_between_divider_middle") - get("material_thickness"));
 
-	set("outer_x", get("inner_x") + 2 * get("material_thickness"));
+	calc("outer_x", get("inner_x") + 2 * get("material_thickness"));
 
-	set("space_between_joints", (get("inner_x") - get("number_of_horizontal_joints") * get("joint_length")) / (get("number_of_horizontal_joints") + 1));
+	calc("space_between_joints", (get("inner_x") - get("number_of_horizontal_joints") * get("joint_length")) / (get("number_of_horizontal_joints") + 1));
 
-	set("number_of_fingers", get("inner_y") / get("material_thickness"));//todo: this MUST be integer
-	set("flip_stays_the_same", !(get("number_of_fingers") % 2));
-
-	set("between_cuts", get("distance_between_divider_middle") - get("material_thickness"));
+	calc("number_of_fingers_y", get("inner_y") / get("material_thickness"));//todo: this MUST be integer
+	calc("number_of_fingers_z", get("inner_z") / get("material_thickness"));//todo: this MUST be integer
+	calc("flip_stays_the_same_y", !(get("number_of_fingers_y") % 2));
 }
 
 function p(a ,b) {
@@ -96,14 +101,13 @@ function path_base() {
 	path.push("h " + get("inner_x"));
 	path.push("h " + get("material_thickness"));
 
-	const length = (get("number_of_dividers") + 1) * get("distance_between_divider_middle") - get("material_thickness");
-	path.push("v " + length);
+	path.push("v " + get("inner_z"));
 
 	path.push("h " + -get("material_thickness"));
 	path.push("h " + -get("inner_x"));
 	path.push("h " + -get("material_thickness"));
 
-	path.push("v " + -length);
+	path.push("v " + - get("inner_z"));
 
 	all_paths.push(path);
 
@@ -149,16 +153,16 @@ function path_short_side() {
 	let path = ["M " + p(get("material_thickness"), 0)];
 
 	path.push("h " + get("inner_x"));
-	path.push(...path_finger_joint(get("number_of_fingers"), false, true, true));
+	path.push(...path_finger_joint(get("number_of_fingers_y"), false, true, true));
 	path.push("h " + -get("inner_x"));
-	path.push(...path_finger_joint(get("number_of_fingers"), !get("flip_stays_the_same"), true, false));
+	path.push(...path_finger_joint(get("number_of_fingers_y"), !get("flip_stays_the_same_y"), true, false));
 	return [path];
 }
 
 function path_long_side() {
-	let path = ["M " + p(0, get("material_thickness"))];
+	let path = ["M " + p(get("material_thickness"), get("material_thickness"))];
 
-	path.push(...path_finger_joint(get("number_of_fingers"), true, false, true));
+	path.push(...path_finger_joint(get("number_of_fingers_y"), false, false, true));
 
 	for (let i = 0; i < get("number_of_dividers"); ++i) {
 		path.push("v " + get("between_cuts"));
@@ -169,10 +173,11 @@ function path_long_side() {
 
 	path.push("v " + get("between_cuts"));
 
-	path.push(...path_finger_joint(get("number_of_fingers"), get("flip_stays_the_same"), false, false));
+	path.push(...path_finger_joint(get("number_of_fingers_y"), get("flip_stays_the_same_y"), false, false));
 
-	const bottom_length = get("number_of_dividers") * get("distance_between_divider_middle");
-	path.push("z");
+	path.push(...path_finger_joint(get("number_of_fingers_z"), false, true, false));
+	// const bottom_length = get("number_of_dividers") * get("distance_between_divider_middle");
+	// path.push("z");
 	return [path];
 }
 
@@ -200,48 +205,63 @@ function update_svg_by_id(id , content) {
 	}
 }
 
-function create_slider(name, value_object) {
-	let slider = document.createElement("input");
-	slider.type = "range";
-	slider.min = 1;
-	slider.max = 99;
-	slider.value = value_object.x;
-
+function create_gui_element(name, value_object, value_name_to_gui, update_gui) {
 	let s = document.createElement("span");
-
-	let update_value = function() {
-		value_object.x = Number(slider.value);
-		s.textContent = slider.value;
-	};
-	slider.oninput = function() {
-		update_value();
-		calculate();
-		update_svg();
-	}
-
-	update_value();
+	value_name_to_gui[name] = s;
 
 	let description = document.createElement("span");
-	description.textContent = name;
+	description.textContent = name + ":";
 
 	let top = document.createElement("div");
 	top.appendChild(description);
-	top.appendChild(slider);
+
+	if (!value_object.read_only) {
+		let slider = document.createElement("input");
+		slider.type = "range";
+		slider.min = 1;
+		slider.max = 99;
+		slider.value = value_object.x;
+
+		let modify_value = function() {
+			value_object.x = Number(slider.value);
+		};
+
+		slider.oninput = function() {
+			modify_value();
+			calculate();
+			update_gui();
+			update_svg();
+		}
+
+		top.appendChild(slider);
+	}
+
 	top.appendChild(s);
 	return top;
 }
 
 function DOM_ready() {
 	set_up();
+	calculate();
+
+	let value_name_to_gui = {
+	};
+
+	let update_gui = function() {
+		Object.entries(value_name_to_gui).forEach(function ([key, value]) {
+			value.textContent = get(key);
+		});
+	};
 
 	let c = document.getElementById("controls");
 	Object.entries(values).forEach(function ([key, value]) {
 		// console.log(key);
 		// console.log(value);
-		c.appendChild(create_slider(key, value));
+		c.appendChild(create_gui_element(key, value, value_name_to_gui, update_gui));
 	});
 
-	calculate();
+	update_gui();
+
 	// console.log(values);
 	update_svg();
 }
