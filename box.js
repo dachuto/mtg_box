@@ -29,7 +29,7 @@ function set_up() {
 	set("cut_small_horizontal", 4);
 	set("joint_length", 6); //tricky
 	set("number_of_horizontal_joints", 2);
-	set("number_of_dividers", 3);
+	set("number_of_dividers", 4);
 	set("distance_between_divider_middle", 20);
 }
 
@@ -95,20 +95,17 @@ function path_divider() {
 
 function path_base() {
 	let all_paths = [];
-	let path = ["M 0,0"];
+	let path = ["M " + p(get("material_thickness"), 0)];
 
-	path.push("h " + get("material_thickness"));
 	path.push("h " + get("inner_x"));
-	path.push("h " + get("material_thickness"));
 
-	path.push("v " + get("inner_z"));
+	path.push(...path_finger_joint(get("number_of_fingers_z"), false, true, true));
 
-	path.push("h " + -get("material_thickness"));
+	// path.push("h " + -get("material_thickness"));
 	path.push("h " + -get("inner_x"));
-	path.push("h " + -get("material_thickness"));
+	// path.push("h " + -get("material_thickness"));
 
-	path.push("v " + - get("inner_z"));
-
+	path.push(...path_finger_joint(get("number_of_fingers_z"), true, true, false));
 	all_paths.push(path);
 
 	for (let i = 0; i < get("number_of_horizontal_joints"); ++i) {
