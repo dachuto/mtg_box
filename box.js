@@ -27,27 +27,29 @@ function set_up() {
 	set("cut_vertical_straight_depth", 10);
 	set("cut_vertical_curve_depth", 32);
 	set("cut_small_horizontal", 4);
-	set("joint_length", 6); //tricky
+	set("joint_length_x", 4);
+	set("divider_depth_y", 8);
 	set("number_of_horizontal_joints", 2);
 	set("number_of_dividers", 4);
-	set("distance_between_divider_middle", 32);
+	set("distance_between_dividers", 20);
 }
 
 
 function calculate() {
 	calc("inner_x", get("card_width") + 2 * get("margin_horizontal"));
 	calc("inner_y",  get("card_height") + get("margin_top"));
-	calc("between_cuts", get("distance_between_divider_middle") - get("material_thickness"));
-	calc("inner_z", (get("number_of_dividers") + 1) * get("distance_between_divider_middle") - get("material_thickness"));
+	calc("inner_z", (get("number_of_dividers") + 1) * get("distance_between_dividers") + get("number_of_dividers") * get("material_thickness"));
 
 	calc("outer_x", get("inner_x") + 2 * get("material_thickness"));
 
-	calc("space_between_joints", (get("inner_x") - get("number_of_horizontal_joints") * get("joint_length")) / (get("number_of_horizontal_joints") + 1));
+	calc("space_between_joints", (get("inner_x") - get("number_of_horizontal_joints") * get("joint_length_x")) / (get("number_of_horizontal_joints") + 1));
 
 	calc("number_of_fingers_x", get("inner_x") / get("material_thickness"));//todo: this MUST be integer
 	calc("number_of_fingers_y", get("inner_y") / get("material_thickness"));//todo: this MUST be integer
 	calc("number_of_fingers_z", get("inner_z") / get("material_thickness"));//todo: this MUST be integer
-	calc("flip_stays_the_same_y", !(get("number_of_fingers_y") % 2));
+	calc("flip_x_must_be_1", (get("number_of_fingers_x") % 2));
+	calc("flip_y_must_be_1", (get("number_of_fingers_y") % 2));
+	calc("flip_z_must_be_1", (get("number_of_fingers_z") % 2));
 }
 
 function p(a ,b) {
@@ -75,22 +77,22 @@ function path_divider() {
 
 	path.push("h " + half_outer_x_without_cut);
 
-	path.push("v " + get("joint_length"));
+	path.push("v " + get("divider_depth_y"));
 	path.push("h " + -get("material_thickness"));
-	const horizontal_side = get("inner_y") - get("joint_length");
-	path.push("v " + horizontal_side);
+	const side = get("inner_y") - get("joint_length_x");
+	path.push("v " + side);
 
 	for (let i = 0; i < get("number_of_horizontal_joints"); ++i) {
 		path.push("h " + -get("space_between_joints"));
 		path.push("v " + get("material_thickness"));
-		path.push("h " + -get("joint_length"));
+		path.push("h " + -get("joint_length_x"));
 		path.push("v " + -get("material_thickness"));
 	}
 	path.push("h " + -get("space_between_joints"));
 
-	path.push("v " + -horizontal_side);
+	path.push("v " + -side);
 	path.push("h " + -get("material_thickness"));
-	path.push("v " + -get("joint_length"));
+	path.push("v " + -get("divider_depth_y"));
 	return [path];
 }
 
@@ -99,19 +101,19 @@ function path_base() {
 	let path = ["M " + p(get("material_thickness"), 0)];
 
 	path.push(...finger_joint.path_right(get("number_of_fingers_x"), false, false, directions.RIGHT));
-	path.push(...finger_joint.path_right(get("number_of_fingers_z"), true, true, directions.DOWN));
+	path.push(...finger_joint.path_right(get("number_of_fingers_z") + 2, true, true, directions.DOWN));
 	path.push(...finger_joint.path_right(get("number_of_fingers_x"), false, false, directions.LEFT));
-	path.push(...finger_joint.path_right(get("number_of_fingers_z"), true, true, directions.UP));
+	path.push(...finger_joint.path_right(get("number_of_fingers_z") + 2, true, true, directions.UP));
 	all_paths.push(path);
 
 	for (let i = 0; i < get("number_of_horizontal_joints"); ++i) {
 		for (let j = 0; j < get("number_of_dividers"); ++j) {
-			const x_pos = get("material_thickness") + (i + 1) * get("space_between_joints") + i * get("joint_length");
-			const y_pos = j * get("distance_between_divider_middle") + get("between_cuts");
-			let inner_path = ["M " + p(x_pos, y_pos)];
-			inner_path.push("h " + get("joint_length"));
+			const x_pos = 1 * get("material_thickness") + (i + 1) * get("space_between_joints") + i * get("joint_length_x");
+			const z_pos = (j + 1) * (get("distance_between_dividers") + get("material_thickness"));
+			let inner_path = ["M " + p(x_pos, z_pos)];
+			inner_path.push("h " + get("joint_length_x"));
 			inner_path.push("v " + get("material_thickness"));
-			inner_path.push("h " + -get("joint_length"));
+			inner_path.push("h " + -get("joint_length_x"));
 			inner_path.push("v " + -get("material_thickness"));
 
 			all_paths.push(inner_path);
@@ -154,28 +156,6 @@ class finger_joint {
 	}
 }
 
-
-function path_finger_joint(number_of_fingers, flip, vertical, increasing) {
-	let path = [];
-	const main = (vertical ? "v" : "h") + " ";
-	const side = (vertical ? "h" : "v") + " ";
-
-	const main_sign = increasing ? 1 : -1;
-	const side_sign = main_sign * (vertical ? 1 : -1);
-
-	for (let i = 0; i < number_of_fingers; ++i) {
-		if (flip) {
-			path.push(main + main_sign * get("material_thickness"));
-		} else {
-			path.push(side + side_sign * get("material_thickness"));
-			path.push(main + main_sign * get("material_thickness"));
-			path.push(side + (-side_sign) * get("material_thickness"));
-		}
-		flip = !flip;
-	}
-	return path;
-}
-
 function path_short_side() {
 	let path = ["M " + p(get("material_thickness"), get("material_thickness"))];
 
@@ -189,20 +169,20 @@ function path_short_side() {
 function path_long_side() {
 	let path = ["M " + p(get("material_thickness"), get("material_thickness"))];
 
-	path.push(...path_finger_joint(get("number_of_fingers_y"), false, false, true));
+	path.push(...finger_joint.path_right(get("number_of_fingers_y"), true, true, directions.RIGHT));
 
 	for (let i = 0; i < get("number_of_dividers"); ++i) {
-		path.push("v " + get("between_cuts"));
-		path.push("h " + -get("joint_length"));
+		path.push("v " + get("distance_between_dividers"));
+		path.push("h " + -get("divider_depth_y"));
 		path.push("v " + get("material_thickness"));
-		path.push("h " + get("joint_length"));
+		path.push("h " + get("divider_depth_y"));
 	}
 
-	path.push("v " + get("between_cuts"));
+	path.push("v " + get("distance_between_dividers"));
 
-	path.push(...path_finger_joint(get("number_of_fingers_y"), get("flip_stays_the_same_y"), false, false));
+	path.push(...finger_joint.path_right(get("number_of_fingers_y"), true, true, directions.LEFT));
 
-	path.push(...path_finger_joint(get("number_of_fingers_z"), false, true, false));
+	path.push(...finger_joint.path_right(get("number_of_fingers_z"), true, true, directions.UP));
 
 	return [path];
 }
