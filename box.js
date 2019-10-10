@@ -20,7 +20,7 @@ function set_up() {
 	set("card_width", 63);
 	set("card_height", 88);
 
-	set("margin_horizontal", 3);
+	set("margin_horizontal", 2.5);
 	set("margin_top", 4); //material
 
 	set("cut_horizontal", 32);
@@ -30,7 +30,7 @@ function set_up() {
 	set("joint_length", 6); //tricky
 	set("number_of_horizontal_joints", 2);
 	set("number_of_dividers", 4);
-	set("distance_between_divider_middle", 20);
+	set("distance_between_divider_middle", 32);
 }
 
 
@@ -44,6 +44,7 @@ function calculate() {
 
 	calc("space_between_joints", (get("inner_x") - get("number_of_horizontal_joints") * get("joint_length")) / (get("number_of_horizontal_joints") + 1));
 
+	calc("number_of_fingers_x", get("inner_x") / get("material_thickness"));//todo: this MUST be integer
 	calc("number_of_fingers_y", get("inner_y") / get("material_thickness"));//todo: this MUST be integer
 	calc("number_of_fingers_z", get("inner_z") / get("material_thickness"));//todo: this MUST be integer
 	calc("flip_stays_the_same_y", !(get("number_of_fingers_y") % 2));
@@ -97,15 +98,10 @@ function path_base() {
 	let all_paths = [];
 	let path = ["M " + p(get("material_thickness"), 0)];
 
-	path.push("h " + get("inner_x"));
-
-	path.push(...path_finger_joint(get("number_of_fingers_z"), false, true, true));
-
-	// path.push("h " + -get("material_thickness"));
-	path.push("h " + -get("inner_x"));
-	// path.push("h " + -get("material_thickness"));
-
-	path.push(...path_finger_joint(get("number_of_fingers_z"), true, true, false));
+	path.push(...finger_joint.path_right(get("number_of_fingers_x"), false, false, directions.RIGHT));
+	path.push(...finger_joint.path_right(get("number_of_fingers_z"), true, true, directions.DOWN));
+	path.push(...finger_joint.path_right(get("number_of_fingers_x"), false, false, directions.LEFT));
+	path.push(...finger_joint.path_right(get("number_of_fingers_z"), true, true, directions.UP));
 	all_paths.push(path);
 
 	for (let i = 0; i < get("number_of_horizontal_joints"); ++i) {
@@ -124,6 +120,40 @@ function path_base() {
 
 	return all_paths;
 }
+
+const directions = {
+	LEFT: [false, -1],
+	RIGHT: [false, 1],
+	UP: [true, -1],
+	DOWN: [true, 1]
+};
+
+class finger_joint {
+	static path_right(number_of_fingers, inside, finger_first, direction) {
+		let path = [];
+
+		const vertical = direction[0];
+		const increasing = direction[1];
+
+		const main = (vertical ? "v" : "h") + " ";
+		const side = (vertical ? "h" : "v") + " ";
+
+		const side_sign = increasing * (inside ? 1 : -1) * (vertical ? 1 : -1);
+
+		for (let i = 0; i < number_of_fingers; ++i) {
+			if (finger_first) {
+				path.push(side + side_sign * get("material_thickness"));
+				path.push(main + increasing * get("material_thickness"));
+				path.push(side + (-side_sign) * get("material_thickness"));
+			} else {
+				path.push(main + increasing * get("material_thickness"));
+			}
+			finger_first = !finger_first;
+		}
+		return path;
+	}
+}
+
 
 function path_finger_joint(number_of_fingers, flip, vertical, increasing) {
 	let path = [];
@@ -147,12 +177,12 @@ function path_finger_joint(number_of_fingers, flip, vertical, increasing) {
 }
 
 function path_short_side() {
-	let path = ["M " + p(get("material_thickness"), 0)];
+	let path = ["M " + p(get("material_thickness"), get("material_thickness"))];
 
-	path.push("h " + get("inner_x"));
-	path.push(...path_finger_joint(get("number_of_fingers_y"), false, true, true));
+	path.push(...finger_joint.path_right(get("number_of_fingers_x"), true, false, directions.RIGHT));
+	path.push(...finger_joint.path_right(get("number_of_fingers_y"), true, false, directions.DOWN));
 	path.push("h " + -get("inner_x"));
-	path.push(...path_finger_joint(get("number_of_fingers_y"), !get("flip_stays_the_same_y"), true, false));
+	path.push(...finger_joint.path_right(get("number_of_fingers_y"), true, false, directions.UP));
 	return [path];
 }
 
@@ -173,8 +203,7 @@ function path_long_side() {
 	path.push(...path_finger_joint(get("number_of_fingers_y"), get("flip_stays_the_same_y"), false, false));
 
 	path.push(...path_finger_joint(get("number_of_fingers_z"), false, true, false));
-	// const bottom_length = get("number_of_dividers") * get("distance_between_divider_middle");
-	// path.push("z");
+
 	return [path];
 }
 
